@@ -41,9 +41,8 @@ const LIBC = Deno.dlopen("/usr/lib/libc.so.6", {
   },
 });
 
-/** Convert JS string to C 0-terminated string. */
-function toCString(s: string) {
-  return new TextEncoder().encode(s + "\0");
+function encode(s: string, zero = true) {
+  return new TextEncoder().encode(s + (zero ? "\0" : ""));
 }
 
 /**
@@ -57,7 +56,8 @@ export async function setxattr(
   name: string,
   value: string,
 ): Promise<boolean> {
-  const [pb, nb, vb] = [path, name, value].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
+  const vb = encode(value, false);
   const ret = await LIBC.symbols.setxattr(pb, nb, vb, vb.length, 0);
   return ret == 0;
 }
@@ -73,7 +73,8 @@ export async function lsetxattr(
   name: string,
   value: string,
 ): Promise<boolean> {
-  const [pb, nb, vb] = [path, name, value].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
+  const vb = encode(value, false);
   const ret = await LIBC.symbols.lsetxattr(pb, nb, vb, vb.length, 0);
   return ret == 0;
 }
@@ -87,13 +88,17 @@ export async function getxattr(
   path: string,
   name: string,
 ): Promise<string | null> {
-  const [pb, nb] = [path, name].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
   const size = Number(await LIBC.symbols.getxattr(pb, nb, null, 0));
   if (size < 0) return null;
-  const buffer = new Uint8Array(size);
-  const ret = await LIBC.symbols.getxattr(pb, nb, buffer, size);
-  if (ret < 0) return null;
-  return new TextDecoder().decode(buffer.subarray(0, size - 1));
+  try {
+    const buffer = new Uint8Array(size);
+    const ret = await LIBC.symbols.getxattr(pb, nb, buffer, size);
+    if (ret < 0) return null;
+    return new TextDecoder().decode(buffer);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -105,13 +110,17 @@ export async function lgetxattr(
   path: string,
   name: string,
 ): Promise<string | null> {
-  const [pb, nb] = [path, name].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
   const size = Number(await LIBC.symbols.lgetxattr(pb, nb, null, 0));
   if (size < 0) return null;
-  const buffer = new Uint8Array(size);
-  const ret = await LIBC.symbols.lgetxattr(pb, nb, buffer, size);
-  if (ret < 0) return null;
-  return new TextDecoder().decode(buffer.subarray(0, size - 1));
+  try {
+    const buffer = new Uint8Array(size);
+    const ret = await LIBC.symbols.lgetxattr(pb, nb, buffer, size);
+    if (ret < 0) return null;
+    return new TextDecoder().decode(buffer);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -121,7 +130,7 @@ export async function lgetxattr(
 export async function listxattr(
   path: string,
 ): Promise<string[] | null> {
-  const pb = toCString(path);
+  const pb = encode(path);
   const size = await LIBC.symbols.listxattr(pb, null, 0);
   if (size < 0) return null;
   const buffer = new Uint8Array(Number(size));
@@ -139,7 +148,7 @@ export async function listxattr(
 export async function llistxattr(
   path: string,
 ): Promise<string[] | null> {
-  const pb = toCString(path);
+  const pb = encode(path);
   const size = await LIBC.symbols.listxattr(pb, null, 0);
   if (size < 0) return null;
   const buffer = new Uint8Array(Number(size));
@@ -159,7 +168,7 @@ export async function removexattr(
   path: string,
   name: string,
 ): Promise<boolean> {
-  const [pb, nb] = [path, name].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
   const ret = await LIBC.symbols.removexattr(pb, nb);
   return ret == 0;
 }
@@ -173,7 +182,7 @@ export async function lremovexattr(
   path: string,
   name: string,
 ): Promise<boolean> {
-  const [pb, nb] = [path, name].map(toCString);
+  const [pb, nb] = [path, name].map((x) => encode(x));
   const ret = await LIBC.symbols.lremovexattr(pb, nb);
   return ret == 0;
 }
